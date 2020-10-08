@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, TextInput, StyleSheet, Platform, TouchableNativeFeedback, TouchableHighlight } from 'react-native';
 
 import DecreaseIcon from './DecreaseIcon';
@@ -72,6 +72,10 @@ const NumericInput = ({
   const continuallyDecreasing = useRef(0);
   const continuallyIncreasing = useRef(0);
   const speedUpTimeout = useRef(null);
+
+  useEffect(() => {
+    setValue((prevValue) => format(checkMinMax(parseFloat(prevValue), min, max), digits));
+  }, [min, max, digits]);
 
   const onDecrease = useCallback(() => {
     setValue((prevValue) => {
