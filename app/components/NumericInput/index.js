@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, TextInput, StyleSheet, Platform, TouchableNativeFeedback, TouchableHighlight } from 'react-native';
+import { View, TextInput, StyleSheet, TouchableHighlight } from 'react-native';
 
 import DecreaseIcon from './DecreaseIcon';
 import IncreaseIcon from './IncreaseIcon';
@@ -29,6 +29,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#C4C4C4',
+  },
+  disabled: {
+    backgroundColor: '#E3E3E3',
   },
   textInput: {
     flex: 1,
@@ -68,7 +71,12 @@ const NumericInput = ({
   style,
   ...props
 }) => {
-  const [value, setValue] = useState(format(checkMinMax(initialValue, min, max), digits));
+  min = parseFloat(format(min, digits));
+  max = parseFloat(format(max, digits));
+  const checkedInitialValue = checkMinMax(initialValue, min, max);
+  const formattedInitialValue = format(checkedInitialValue, digits);
+  const [value, setValue] = useState(formattedInitialValue);
+  const valueFloat = useRef(checkedInitialValue);
   const continuallyDecreasing = useRef(0);
   const continuallyIncreasing = useRef(0);
   const speedUpTimeout = useRef(null);
@@ -77,35 +85,37 @@ const NumericInput = ({
     setValue((prevValue) => format(checkMinMax(parseFloat(prevValue), min, max), digits));
   }, [min, max, digits]);
 
-  const onDecrease = useCallback(() => {
-    setValue((prevValue) => {
-      const newValue = checkMinMax(parseFloat(prevValue) - step, min, max);
+  const onDecrease = useCallback((fireOnChange = true) => {
+    const newValue = checkMinMax(valueFloat.current - step, min, max);
+    valueFloat.current = newValue;
+    setValue(format(newValue, digits));
+    if (fireOnChange) {
       onChange(newValue);
-      return format(newValue, digits);
-    });
-  }, [onChange, digits]);
+    }
+  }, [onChange, digits, min, max]);
 
-  const onIncrease = useCallback(() => {
-    setValue((prevValue) => {
-      const newValue = checkMinMax(parseFloat(prevValue) + step, min, max);
+  const onIncrease = useCallback((fireOnChange = true) => {
+    const newValue = checkMinMax(valueFloat.current + step, min, max);
+    valueFloat.current = newValue;
+    setValue(format(newValue, digits));
+    if (fireOnChange) {
       onChange(newValue);
-      return format(newValue, digits);
-    });
-  }, [onChange, digits]);
+    }
+  }, [onChange, digits, min, max]);
 
-  const scheduleDecrease = () => {
+  const scheduleDecrease = useCallback(() => {
     if (continuallyDecreasing.current) {
-      onDecrease();
+      onDecrease(false);
       setTimeout(scheduleDecrease, continuallyDecreasing.current);
     }
-  }
+  }, [onChange, digits, min, max]);
 
-  const scheduleIncrease = () => {
+  const scheduleIncrease = useCallback(() => {
     if (continuallyIncreasing.current) {
-      onIncrease();
+      onIncrease(false);
       setTimeout(scheduleIncrease, continuallyIncreasing.current);
     }
-  }
+  }, [onChange, digits, min, max]);
 
   const onDecreasePressIn = useCallback(() => {
     continuallyDecreasing.current = 100;
@@ -115,7 +125,7 @@ const NumericInput = ({
     speedUpTimeout.current = setTimeout(() => {
       continuallyDecreasing.current = 10; // speed up
     }, 2000);
-  }, [onChange, digits]);
+  }, [onChange, digits, min, max]);
 
   const onIncreasePressIn = useCallback(() => {
     continuallyIncreasing.current = 100;
@@ -125,39 +135,50 @@ const NumericInput = ({
     speedUpTimeout.current = setTimeout(() => {
       continuallyIncreasing.current = 10; // speed up
     }, 2000);
-  }, [onChange, digits]);
+  }, [onChange, digits, min, max]);
 
   const onDecreasePressOut = useCallback(() => {
-    clearTimeout(speedUpTimeout.current);
+    if (speedUpTimeout.current) {
+      clearTimeout(speedUpTimeout.current);
+      speedUpTimeout.current = null;
+    }
     continuallyDecreasing.current = 0;
+    onChange(valueFloat.current);
   }, []);
 
   const onIncreasePressOut = useCallback(() => {
-    clearTimeout(speedUpTimeout.current);
+    if (speedUpTimeout.current) {
+      clearTimeout(speedUpTimeout.current);
+      speedUpTimeout.current = null;
+    }
     continuallyIncreasing.current = 0;
+    onChange(valueFloat.current);
   }, []);
 
   const onChangeText = useCallback((text) => {
     text = text.replace(/[\-\s]/, '');
+    text = text.replace(',', '.');
     setValue(text);
   }, []);
 
   const onEndEditing = useCallback((event) => {
     const newFloat = checkMinMax(parseFloat(event.nativeEvent.text), min, max);
     const newValue = format(newFloat, digits);
-    onChange(parseFloat(newValue));
+    valueFloat.current = parseFloat(newValue);
+    onChange(valueFloat.current);
     setValue(newValue);
   }, []);
 
-  const Touchable = Platform.OS === 'ios' ? TouchableHighlight : TouchableNativeFeedback;
+  const leftDisabled = parseFloat(value) <= min + step / 2;
+  const rightDisabled = parseFloat(value) >= max - step / 2;
 
   return (
     <View style={styles.container}>
-      <Touchable onPress={onDecrease} onPressIn={onDecreasePressIn} onPressOut={onDecreasePressOut}>
-        <View style={styles.leftButton}>
+      <TouchableHighlight style={styles.leftButton} disabled={leftDisabled} onPress={onDecrease} onPressIn={onDecreasePressIn} onPressOut={onDecreasePressOut}>
+        <View style={[styles.leftButton, leftDisabled && styles.disabled]}>
           <DecreaseIcon />
         </View>
-      </Touchable>
+      </TouchableHighlight>
       <TextInput
         ref={textInputRef}
         style={[styles.textInput, style]}
@@ -168,11 +189,11 @@ const NumericInput = ({
         textAlign="center"
         { ...props }
       />
-      <Touchable onPress={onIncrease} onPressIn={onIncreasePressIn} onPressOut={onIncreasePressOut}>
-        <View style={styles.rightButton}>
+      <TouchableHighlight style={styles.rightButton} disabled={rightDisabled} onPress={onIncrease} onPressIn={onIncreasePressIn} onPressOut={onIncreasePressOut}>
+        <View style={[styles.rightButton, rightDisabled && styles.disabled]}>
           <IncreaseIcon />
         </View>
-      </Touchable>
+      </TouchableHighlight>
     </View>
   );
 };
