@@ -159,6 +159,7 @@ const NumericInput = ({
         </View>
       </Touchable>
       <TextInput
+        ref={textInputRef}
         style={[styles.textInput, style]}
         value={value}
         keyboardType="numeric"
